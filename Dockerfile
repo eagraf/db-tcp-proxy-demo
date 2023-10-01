@@ -7,4 +7,5 @@ RUN go get ./... && \
 FROM scratch
 COPY --from=builder /go/src/github.com/jpillora/go-tcp-proxy/tcp-proxy /tcp-proxy
 WORKDIR /
+
 ENTRYPOINT ["./tcp-proxy"]
