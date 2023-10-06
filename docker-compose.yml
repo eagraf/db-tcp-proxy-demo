@@ -1,5 +1,5 @@
 services:
-  db:
+  postgres:
     image: postgres
     restart: always
     user: postgres
@@ -18,8 +18,14 @@ services:
       timeout: 5s
       retries: 5
 
+  mongo:
+    image: mongo
+    restart: always
+    ports:
+      - 27017:27017
+
   proxy:
-    command: ["-r", "db:5432", "-l", ":2143"]
+    command: ["-r", "postgres:5432", "-r", "mongo:27017", "-l", ":2143"]
     build: .
     ports:
       - 80:80
