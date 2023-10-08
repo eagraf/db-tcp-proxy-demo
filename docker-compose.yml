@@ -25,7 +25,8 @@ services:
       - 27017:27017
 
   proxy:
-    command: ["-r", "postgres:5432", "-r", "mongo:27017", "-l", ":2143"]
+  #  command: ["-r", "postgres:5432", "-r", "mongo:27017", "-l", ":2143"]
+    command: ["-r", "postgres:5432", "-l", ":2143"]
     build: .
     ports:
       - 80:80

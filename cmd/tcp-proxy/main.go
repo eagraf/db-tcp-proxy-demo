@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"regexp"
-	"strings"
 
 	proxy "github.com/jpillora/go-tcp-proxy"
 )
@@ -49,14 +47,21 @@ func main() {
 		logger.Warn("Failed to resolve remote address: %s", err)
 		os.Exit(1)
 	}
+
+	raddr2, err := net.ResolveTCPAddr("tcp", "mongo:27017")
+	if err != nil {
+		logger.Warn("Failed to resolve remote address: %s", err)
+		os.Exit(1)
+	}
+
 	listener, err := net.ListenTCP("tcp", laddr)
 	if err != nil {
 		logger.Warn("Failed to open local port to listen: %s", err)
 		os.Exit(1)
 	}
 
-	matcher := createMatcher(*match)
-	replacer := createReplacer(*replace)
+	//	matcher := createMatcher(*match)
+	//replacer := createReplacer(*replace)
 
 	if *veryverbose {
 		*verbose = true
@@ -73,13 +78,13 @@ func main() {
 		var p *proxy.Proxy
 		if *unwrapTLS {
 			logger.Info("Unwrapping TLS")
-			p = proxy.NewTLSUnwrapped(conn, laddr, raddr, *remoteAddr)
+			p = proxy.NewTLSUnwrapped(conn, laddr, []*net.TCPAddr{raddr, raddr2}, *remoteAddr)
 		} else {
-			p = proxy.New(conn, laddr, raddr)
+			p = proxy.New(conn, laddr, []*net.TCPAddr{raddr, raddr2})
 		}
 
-		p.Matcher = matcher
-		p.Replacer = replacer
+		//p.Matcher = matcher
+		//p.Replacer = replacer
 
 		p.Nagles = *nagles
 		p.OutputHex = *hex
@@ -90,11 +95,15 @@ func main() {
 			Color:       *colors,
 		}
 
+		// Dex Proxy Strategy: read in the first buffer from the connection (up to the limit)
+		// Forward the first buffer to each of the databases.
+		// If the first buffer matches a database, then forward the rest of the connection to that database.
+		// Drop the connection for the rest
 		go p.Start()
 	}
 }
 
-func createMatcher(match string) func([]byte) {
+/*func createMatcher(match string) func([]byte) {
 	if match == "" {
 		return nil
 	}
@@ -137,4 +146,4 @@ func createReplacer(replace string) func([]byte) []byte {
 	return func(input []byte) []byte {
 		return re.ReplaceAll(input, repl)
 	}
-}
+}*/
