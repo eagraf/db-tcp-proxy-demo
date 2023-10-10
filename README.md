@@ -1,24 +1,48 @@
-# tcp-proxy
+# TL; DR
 
-A small TCP proxy written in Go
+A TCP proxy that can route incoming connections with the right application.
 
-This project was intended for debugging text-based protocols. The next version will address binary protocols.
+Based off of https://github.com/jpillora/go-tcp-proxy
 
-## Install
+## Longer description
 
-**Binaries**
 
-Download [the latest release](https://github.com/jpillora/go-tcp-proxy/releases/latest), or
+## What this demo does
 
-Install latest release now with `curl https://i.jpillora.com/go-tcp-proxy! | bash`
+The docker-compose file describes two database containers, MongoDB and PostgreSQL. In addition, there is a (reverse) proxy container that contains the built Go binary of this demo.
 
-**Source**
+The proxy can take incoming connections from Mongo and Postgres clients, and route them to the right database. A request coming from `psql` will be sent to the Postgres database, a Mongo client will send the request to the Mongo database, even though the URL configured to these clients stayed the same.
 
-``` sh
-$ go get -v github.com/jpillora/go-tcp-proxy/cmd/tcp-proxy
-```
+## Why would I want this?
+Applications need to know the address of the database(s) they rely on to function. In scenarios where this URL could change frequently, it's advantageous for a different service to handle the routing to the right location. This is extra useful when there might be multiple databases in question. A proxy layer also allows for more advanced routing logic, permissions, middleware, and more.
+
+## How does the routing work?
+When a new connection is created, the proxy reads in one buffer of input from the client. This buffer is then forwarded to all potential matching databases. The proxy assumes that the correct database will respond within 1 second, and that the connection won't close. If exactly one successful connection is maintained, then all other connections are closed, and the one good connection is maintained, and regular traffic commences. More than one successful connection is considered an error.
+
+## Potential Risks
+* This is kind of a hack
+* Routing to multiple databases of the same kind might be a bit tricky. Further experimentation is needed
+* Databases that have complicated handshakes might be difficult to work with.
 
 ## Usage
+1. Build the docker container
+```
+docker build . -t go-tcp-proxy_proxy:latest
+```
+2. Run docker-compose
+```
+docker-compose up
+```
+3. Try using psql to hit the proxy
+```
+psql -h localhost -p 2143 -U postgres
+Password for user postgres: abc
+```
+
+4. Watch the proxy route the command to the postgres db
+You should be able to use the psql client with the pg db now.
+
+## CLI Usage
 
 ```
 $ tcp-proxy --help
@@ -37,59 +61,3 @@ Usage of tcp-proxy:
 *Note: Regex match and replace*
 **only works on text strings**
 *and does NOT work across packet boundaries*
-
-### Simple Example
-
-Since HTTP runs over TCP, we can also use `tcp-proxy` as a primitive HTTP proxy:
-
-```
-$ tcp-proxy -r echo.jpillora.com:80
-Proxying from localhost:9999 to echo.jpillora.com:80
-```
-
-Then test with `curl`:
-
-```
-$ curl -H 'Host: echo.jpillora.com' localhost:9999/foo
-{
-  "method": "GET",
-  "url": "/foo"
-  ...
-}
-```
-
-### Match Example
-
-```
-$ tcp-proxy -r echo.jpillora.com:80 -match 'Host: (.+)'
-Proxying from localhost:9999 to echo.jpillora.com:80
-Matching Host: (.+)
-
-#run curl again...
-
-Connection #001 Match #1: Host: echo.jpillora.com
-```
-
-### Replace Example
-
-```
-$ tcp-proxy -r echo.jpillora.com:80 -replace '"ip": "([^"]+)"~"ip": "REDACTED"'
-Proxying from localhost:9999 to echo.jpillora.com:80
-Replacing "ip": "([^"]+)" with "ip": "REDACTED"
-```
-
-```
-#run curl again...
-{
-  "ip": "REDACTED",
-  ...
-```
-
-*Note: The `-replace` option is in the form `regex~replacer`. Where `replacer` may contain `$N` to substitute in group `N`.*
-
-### Todo
-
-* Implement `tcpproxy.Conn` which provides accounting and hooks into the underlying `net.Conn`
-* Verify wire protocols by providing `encoding.BinaryUnmarshaler` to a `tcpproxy.Conn`
-* Modify wire protocols by also providing a map function
-* Implement [SOCKS v5](https://www.ietf.org/rfc/rfc1928.txt) to allow for user-decided remote addresses
